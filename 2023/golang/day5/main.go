@@ -3,27 +3,29 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"math"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 )
 
 func main() {
 	maps := make(map[string][]Map)
-	seeds := []int{}
+	seeds := []SeedRange{}
+
+	// load first line to SeedRange
 	scanner := bufio.NewScanner(os.Stdin)
 	if scanner.Scan() {
 		split := strings.Split(scanner.Text(), ": ")
 		split = strings.Split(split[1], " ")
-		for _, s := range split {
-			seed, err := strconv.Atoi(s)
-			if err != nil {
-				panic(err)
-			}
-			seeds = append(seeds, seed)
+		for i := 0; i < len(split); i += 2 {
+			seed, _ := strconv.Atoi(split[i])
+			length, _ := strconv.Atoi(split[i+1])
+			seeds = append(seeds, SeedRange{seed, length})
 		}
 	}
+
+	// load next lines to maps
 	lastMap := ""
 	keyOrder := []string{}
 	for scanner.Scan() {
@@ -38,23 +40,59 @@ func main() {
 			continue
 		}
 		split := strings.Split(line, " ")
-		split2 := []int{}
+		converted := []int{}
 		for _, s := range split {
 			val, err := strconv.Atoi(s)
 			if err != nil {
 				panic(err)
 			}
-			split2 = append(split2, val)
+			converted = append(converted, val)
 		}
-		maps[lastMap] = append(maps[lastMap], Map{destination: split2[0], source: split2[1], length: split2[2]})
+		maps[lastMap] = append(maps[lastMap], Map{destination: converted[0], source: converted[1], length: converted[2]})
 	}
 
-	locations := []int{}
-	for _, seed := range seeds {
-		lastResult := seed
+	lowestLocation := locationToSeed(maps, keyOrder, seeds)
+	fmt.Println(lowestLocation)
+}
+
+type (
+	Map struct {
+		destination int
+		source      int
+		length      int
+	}
+	SeedRange struct {
+		start  int
+		length int
+	}
+)
+
+func (m *Map) lookup(sourceValue int) int {
+	if sourceValue < m.source || sourceValue >= m.source+m.length {
+		return sourceValue
+	}
+	return m.destination + (sourceValue - m.source)
+}
+
+func (m *Map) reverseLookup(destinationValue int) int {
+	if destinationValue < m.destination || destinationValue >= m.destination+m.length {
+		return destinationValue
+	}
+	return m.source + (destinationValue - m.destination)
+}
+
+func (s *SeedRange) contains(value int) bool {
+	return value >= s.start && value < s.start+s.length
+}
+
+func locationToSeed(maps map[string][]Map, keyOrder []string, seeds []SeedRange) int {
+	lowestLocation := 0
+	slices.Reverse(keyOrder)
+	for {
+		lastResult := lowestLocation
 		for _, key := range keyOrder {
 			for _, m := range maps[key] {
-				result := m.lookup(lastResult)
+				result := m.reverseLookup(lastResult)
 				if result != lastResult {
 					lastResult = result
 					break
@@ -62,25 +100,11 @@ func main() {
 				lastResult = result
 			}
 		}
-		locations = append(locations, lastResult)
+		for _, s := range seeds {
+			if s.contains(lastResult) {
+				return lowestLocation
+			}
+		}
+		lowestLocation++
 	}
-
-	lowestLocation := math.MaxInt
-	for _, location := range locations {
-		lowestLocation = min(lowestLocation, location)
-	}
-	fmt.Println(lowestLocation)
-}
-
-type Map struct {
-	destination int
-	source      int
-	length      int
-}
-
-func (m *Map) lookup(value int) int {
-	if value < m.source || value >= m.source+m.length {
-		return value
-	}
-	return m.destination + (value - m.source)
 }
