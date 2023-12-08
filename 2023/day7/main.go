@@ -11,6 +11,8 @@ import (
 
 func main() {
 	var err error
+	withJoker := true
+
 	scanner := bufio.NewScanner(os.Stdin)
 	hands := []HandCard{}
 	for scanner.Scan() {
@@ -22,10 +24,15 @@ func main() {
 			panic(err)
 		}
 		hands = append(hands, hand)
-		sort.Slice(hands, func(i, j int) bool {
-			return hands[i].isLesser(hands[j])
-		})
 	}
+
+	if withJoker {
+		CardStrength['J'] = 0
+	}
+	sort.Slice(hands, func(i, j int) bool {
+		return hands[i].isLesser(hands[j], withJoker)
+	})
+
 	total := 0
 	for i := range hands {
 		total += hands[i].bid * (i + 1)
@@ -42,13 +49,13 @@ type (
 )
 
 const (
-	HighCard  HandCardType = 1
-	OnePair   HandCardType = 2
-	TwoPair   HandCardType = 3
-	ThreeKind HandCardType = 4
-	FullHouse HandCardType = 5
-	FourKind  HandCardType = 6
-	FiveKind  HandCardType = 7
+	HighCard HandCardType = iota
+	OnePair
+	TwoPair
+	ThreeKind
+	FullHouse
+	FourKind
+	FiveKind
 )
 
 var CardStrength = map[byte]int{
@@ -67,21 +74,56 @@ var CardStrength = map[byte]int{
 	'A': 13,
 }
 
-func (h *HandCard) isLesser(dst HandCard) bool {
-	if h.getType() == dst.getType() {
+func (h *HandCard) isLesser(dst HandCard, withJoker bool) bool {
+	scoreTypeSrc := h.getType()
+	scoreTypeDst := dst.getType()
+	if withJoker {
+		scoreTypeSrc = h.getJokerType()
+		scoreTypeDst = dst.getJokerType()
+	}
+	if scoreTypeSrc == scoreTypeDst {
 		for i := 0; i < len(h.hand); i++ {
 			if CardStrength[h.hand[i]] == CardStrength[dst.hand[i]] {
 				continue
 			}
 			return CardStrength[h.hand[i]] < CardStrength[dst.hand[i]]
 		}
-		fmt.Println("edge cases")
 	}
-	return h.getType() < dst.getType()
+	return scoreTypeSrc < scoreTypeDst
+}
+
+func (h *HandCard) getJokerType() (card_type HandCardType) {
+	cards := make(map[rune]int)
+	for _, v := range h.hand {
+		cards[v]++
+	}
+	distinct_cards := len(cards)
+
+	if strings.ContainsRune(h.hand, 'J') {
+		if distinct_cards == 2 {
+			return FiveKind // AAAAJ|AAAJJ -> AAAAA
+		}
+		if distinct_cards == 3 {
+			if cards['J'] == 3 || cards['J'] == 2 {
+				return FourKind // JJJKQ|JJKKQ -> KKKKQ
+			}
+			if cards[mostCard(cards)] == 3 {
+				return FourKind // JKKKQ -> KKKKQ
+			}
+			return FullHouse // JKKQQ -> KKKQQ
+		}
+		if distinct_cards == 4 {
+			return ThreeKind // JQKAA -> AQKAA
+		}
+		if distinct_cards == 5 {
+			return OnePair // TJQKA -> TTQKA
+		}
+	}
+	return h.getType()
 }
 
 func (h *HandCard) getType() (card_type HandCardType) {
-	cards := make(map[rune]int, 5)
+	cards := make(map[rune]int)
 	for _, v := range h.hand {
 		cards[v]++
 	}
@@ -91,14 +133,14 @@ func (h *HandCard) getType() (card_type HandCardType) {
 		return FiveKind // AAAAA
 	}
 	if distinct_cards == 2 {
-		if maxValueInMap(cards) == 4 {
+		if cards[mostCard(cards)] == 4 {
 			return FourKind // AAAAK
 		} else {
 			return FullHouse // AAAKK
 		}
 	}
 	if distinct_cards == 3 {
-		if maxValueInMap(cards) == 3 {
+		if cards[mostCard(cards)] == 3 {
 			return ThreeKind // AAAKQ
 		} else {
 			return TwoPair // AAKKQ
@@ -108,15 +150,16 @@ func (h *HandCard) getType() (card_type HandCardType) {
 		return OnePair // AAKQJ
 	}
 
-	return HighCard
+	return HighCard // TJQKA
 }
 
-func maxValueInMap(m map[rune]int) int {
-	max := 0
-	for _, v := range m {
-		if v > max {
-			max = v
+func mostCard(m map[rune]int) rune {
+	var maxCard rune
+	maxValue := 0
+	for k := range m {
+		if m[k] > maxValue {
+			maxValue, maxCard = m[k], k
 		}
 	}
-	return max
+	return maxCard
 }
