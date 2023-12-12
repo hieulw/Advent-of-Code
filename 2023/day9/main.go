@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"slices"
 	"strconv"
 	"strings"
 )
@@ -25,12 +24,12 @@ func main() {
 		}
 		for i := 0; ; i++ {
 			numbers = append(numbers, sequenceDiff(numbers[i]))
-			if slices.Max(numbers[i]) == 0 && slices.Min(numbers[i]) == 0 {
+			minNumber, maxNumber := minMax(numbers[i+1])
+			if minNumber == 0 && maxNumber == 0 {
 				break
 			}
 		}
-		fmt.Println(numbers)
-		sum += predictNext(numbers, 0, len(numbers[0]))
+		sum += predictPrevious(numbers, 0)
 	}
 	fmt.Println(sum)
 }
@@ -45,7 +44,8 @@ func predictNext(numbers [][]int, i, j int) int {
 
 func predictPrevious(numbers [][]int, i int) int {
 	last := numbers[i][0]
-	if last == 0 {
+	minNumber, maxNumber := minMax(numbers[i])
+	if minNumber == 0 && maxNumber == 0 {
 		return 0
 	}
 	return last - predictPrevious(numbers, i+1)
@@ -57,4 +57,13 @@ func sequenceDiff(numbers []int) []int {
 		result = append(result, numbers[i]-numbers[i-1])
 	}
 	return result
+}
+
+func minMax(x []int) (int, int) {
+	minInt, maxInt := x[0], x[0]
+	for i := 1; i < len(x); i++ {
+		minInt = min(minInt, x[i])
+		maxInt = max(maxInt, x[i])
+	}
+	return minInt, maxInt
 }
